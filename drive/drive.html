@@ -1,0 +1,53 @@
+<html> 
+<head>
+<title>popup</title>
+<script type="text/javascript">
+
+
+ function Popup(url, WIDTH, HEIGHT) {
+
+windowprops2 = "left=100,top=100,width=1280,height=720;"
+var win2 =window.open('car.mp4',"car",windowprops2)
+setTimeout(function(){win2.close();},5000);
+
+windowprops = "left=50,top=600,width=400,height=300,toolbar=no;"
+var win = window.open('brake.mp4',"brake",windowprops);
+setTimeout(function(){win.close();},5000);
+
+
+windowprops1 = "left=2000,top=180,width=800,height=200;"
+var win1 =window.open('play.html',"play1",windowprops1)
+setTimeout(function(){win1.close();},5000);
+
+
+// different name for each popup
+// create windows as much as you want to create
+}
+
+
+</script>
+</head>
+
+<body OnLoad="Popup();" >
+
+	
+<style>
+
+    body{
+        position: relative;
+        height: 100%;
+        margin: 0;
+        padding:0;
+        box-sizing: border-box; 
+    }
+    #full-video{
+        position: fixed;
+        min-width: 80%;
+        min-height: 50%;
+        right: 0;
+        bottom: 0;
+    }
+</style>
+
+</body>
+</html>

@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html>
+	<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="favicon_io/site.webmanifest">
+    
+
+	<meta charset="utf-8">
+	<title>MAG</title>
+	
+    <script type="text/javascript" src="js/three.min.js"></script>
+    <script type="text/javascript" src="js/TweenMax.min.js"></script>
+    <script type="text/javascript" src="js/three.js"></script>
+
+	</head>
+<body>
+		<div id="world"></div>
+		<style> 
+			#world {
+	position: absolute;
+	width: 1600;
+	height: 900;
+	overflow: hidden;
+	background: linear-gradient(#B8EBD0, #090B0C) ;
+
+	/*background-image: url('bg.jpg'); */
+}
+        </style>
+<script>
+   	var Colors = {
+    red:0xA367E0,
+    white:0xFFFFFF,
+    brown:0x59332e,
+    brownDark:0x23190f,
+    pink:0xF6ABD2,
+    yellow:0xFFFBA9,
+    blue:0x9EA4E0,
+    black:0x090B0C
+};
+
+
+var ennemiesPool = [];
+var particlesPool = [];
+var particlesInUse = [];
+
+
+
+var scene,
+		camera, fieldOfView, aspectRatio, nearPlane, farPlane, HEIGHT, WIDTH,
+		renderer, stars, starGeo, container;
+
+
+
+
+var HEIGHT, WIDTH,
+    mousePos = { x: 0, y: 0 };
+
+
+function createScene() {
+	// Get the width and the height of the screen,
+	// use them to set up the aspect ratio of the camera 
+	// and the size of the renderer.
+	HEIGHT = window.innerHeight;
+	WIDTH = window.innerWidth;
+
+	// Create the scene
+	scene = new THREE.Scene();
+    
+	
+	// Create the camera
+	aspectRatio = WIDTH / HEIGHT;
+	fieldOfView = 60;
+	nearPlane = 1;
+	farPlane = 10000;
+	camera = new THREE.PerspectiveCamera(
+		fieldOfView,
+		aspectRatio,
+		nearPlane,
+		farPlane
+		);
+	
+	// Set the position of the camera
+	scene.fog = new THREE.Fog(0xF6ABD2, 300,950);
+	camera.position.x = Math.PI/2;
+	camera.position.z = 200;
+	camera.position.y = 100;
+	
+	// Create the renderer
+	renderer = new THREE.WebGLRenderer({ 
+		// Allow transparency to show the gradient background
+		// we defined in the CSS
+		alpha: true, 
+
+		// Activate the anti-aliasing; this is less performant,
+		// but, as our project is low-poly based, it should be fine :)
+		antialias: true 
+	});
+
+	// Define the size of the renderer; in this case,
+	// it will fill the entire screen
+	renderer.setSize(WIDTH, HEIGHT);
+	
+	// Enable shadow rendering
+	renderer.shadowMap.enabled = true;
+	
+	// Add the DOM element of the renderer to the 
+	// container we created in the HTML
+	container = document.getElementById('world');
+	container.appendChild(renderer.domElement);
+	
+	// Listen to the screen: if the user resizes it
+	// we have to update the camera and the renderer size
+	window.addEventListener('resize', handleWindowResize, false);
+}
+
+function handleWindowResize() {
+	// update height and width of the renderer and the camera
+	HEIGHT = window.innerHeight;
+	WIDTH = window.innerWidth;
+	renderer.setSize(WIDTH, HEIGHT);
+	camera.aspect = WIDTH / HEIGHT;
+	camera.updateProjectionMatrix();
+}
+
+var hemisphereLight, shadowLight;
+
+function createLights() {
+	// A hemisphere light is a gradient colored light; 
+	// the first parameter is the sky color, the second parameter is the ground color, 
+	// the third parameter is the intensity of the light
+	hemisphereLight = new THREE.HemisphereLight(0xaaaaaa,0x000000, .9)
+	
+	// A directional light shines from a specific direction. 
+	// It acts like the sun, that means that all the rays produced are parallel. 
+	shadowLight = new THREE.DirectionalLight(0xffffff, .9);
+
+	// Set the direction of the light  
+	shadowLight.position.set(150, 350, 350);
+	
+	// Allow shadow casting 
+	shadowLight.castShadow = true;
+
+	// define the visible area of the projected shadow
+	shadowLight.shadow.camera.left = -400;
+	shadowLight.shadow.camera.right = 400;
+	shadowLight.shadow.camera.top = 400;
+	shadowLight.shadow.camera.bottom = -400;
+	shadowLight.shadow.camera.near = 1;
+	shadowLight.shadow.camera.far = 1000;
+
+	// define the resolution of the shadow; the higher the better, 
+	// but also the more expensive and less performant
+	shadowLight.shadow.mapSize.width = 2048;
+	shadowLight.shadow.mapSize.height = 2048;
+	
+	// to activate the lights, just add them to the scene
+	scene.add(hemisphereLight);  
+	scene.add(shadowLight);
+}
+
+
+
+
+
+
+
+var AirPlane = function() {
+	
+	this.mesh = new THREE.Object3D();
+	
+	// Create the cabin
+	var geomCockpit = new THREE.BoxGeometry(100,100,120,1,1,1);
+	var matCockpit = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+	var cockpit = new THREE.Mesh(geomCockpit, matCockpit);
+	cockpit.castShadow = true;
+	cockpit.receiveShadow = true;
+	this.mesh.add(cockpit);
+	
+	// Create the engine
+	var geomEngine = new THREE.BoxGeometry(95,50,60,1,1,1);
+	var matEngine = new THREE.MeshPhongMaterial({color:Colors.blue, shading:THREE.FlatShading});
+	var engine = new THREE.Mesh(geomEngine, matEngine);
+	engine.position.z = -90;
+	engine.position.y = -15;
+	engine.castShadow = true;
+	engine.receiveShadow = true;
+	this.mesh.add(engine);
+
+	var geomBack = new THREE.BoxGeometry(95,60,50,1,1,1);
+	var matBack = new THREE.MeshPhongMaterial({color:Colors.blue, shading:THREE.FlatShading});
+	var back = new THREE.Mesh(geomBack, matBack);
+	back.position.z = 80;
+	back.position.y = -15;
+	back.castShadow = true;
+	back.receiveShadow = true;
+	this.mesh.add(back);
+	
+	// Create the tail
+	var geomTailPlane = new THREE.BoxGeometry(5,20,15,1,1,1);
+	var matTailPlane = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+	var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
+	tailPlane.position.set(0,25,35);
+	tailPlane.castShadow = true;
+	tailPlane.receiveShadow = true;
+	this.mesh.add(tailPlane);
+	
+	// Create the wing
+	var geomSideWing = new THREE.BoxGeometry(102,35,75,1,1,1);
+	var matSideWing = new THREE.MeshPhongMaterial({color:Colors.white, shading:THREE.FlatShading});
+	var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
+	sideWing.position.z = -10;
+	sideWing.position.y = 18;
+	sideWing.castShadow = true;
+	sideWing.receiveShadow = true;
+	this.mesh.add(sideWing);
+
+    var geomTail = new THREE.BoxGeometry(103,22,50,1,1,1);
+	var matTail = new THREE.MeshPhongMaterial({color:Colors.brown, shading:THREE.FlatShading});
+	var tail = new THREE.Mesh(geomTail, matTail);
+	tail.position.x = 0;
+	tail.position.z = 85;
+	tail.position.y = -33;
+	tail.castShadow = true;
+	tail.receiveShadow = true;
+	this.mesh.add(tail);
+
+    var geomLight = new THREE.BoxGeometry(25,15,20,1,1,1);
+	var matLight = new THREE.MeshPhongMaterial({color:Colors.yellow, shading:THREE.FlatShading});
+	var light = new THREE.Mesh(geomLight, matLight);
+	light.position.x = -35;
+	light.position.z = 100;
+	light.position.y = -10;
+	light.castShadow = true;
+	light.receiveShadow = true;
+	this.mesh.add(light);
+	
+    var geomLight1 = new THREE.BoxGeometry(25,15,20,1,1,1);
+	var matLight1 = new THREE.MeshPhongMaterial({color:Colors.yellow, shading:THREE.FlatShading});
+	var light1 = new THREE.Mesh(geomLight1, matLight1);
+	light1.position.x = 35;
+	light1.position.z = 100;
+	light1.position.y = -10;
+	light1.castShadow = true;
+	light1.receiveShadow = true;
+	this.mesh.add(light1);
+	
+
+	// propeller
+	var geomTire = new THREE.CylinderGeometry(30,30,20,10);
+	var matTire = new THREE.MeshPhongMaterial({color:Colors.pink, shading:THREE.FlatShading});
+	geomTire.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	this.tire = new THREE.Mesh(geomTire, matTire);
+	this.tire.castShadow = true;
+	this.tire.receiveShadow = true;
+	
+	var geomBlade = new THREE.CylinderGeometry(25,25,25,8);
+	var matBlade = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+	geomBlade.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	var blade = new THREE.Mesh(geomBlade, matBlade);
+	blade.position.set(0,0,0);
+	blade.castShadow = true;
+	blade.receiveShadow = true;
+	this.tire.add(blade);
+	this.tire.position.set(55,-40,40);
+	this.mesh.add(this.tire);
+
+	var geomPropeller1 = new THREE.CylinderGeometry(30,30,20,10);
+	var matPropeller1 = new THREE.MeshPhongMaterial({color:Colors.pink, shading:THREE.FlatShading});
+	geomPropeller1.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	this.propeller1 = new THREE.Mesh(geomPropeller1, matPropeller1);
+	this.propeller1.castShadow = true;
+	this.propeller1.receiveShadow = true;
+	
+	var geomBlade1 = new THREE.CylinderGeometry(25,25,25,8);
+	var matBlade1 = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+	geomBlade1.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	var blade1 = new THREE.Mesh(geomBlade1, matBlade1);
+	blade1.position.set(0,0,0);
+	blade1.castShadow = true;
+	blade1.receiveShadow = true;
+	this.propeller1.add(blade1);
+	this.propeller1.position.set(-55,-40,40);
+	this.mesh.add(this.propeller1);
+
+	var geomTire1 = new THREE.CylinderGeometry(30,30,20,10);
+	var matTire1 = new THREE.MeshPhongMaterial({color:Colors.pink, shading:THREE.FlatShading});
+	geomTire1.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	this.tire1 = new THREE.Mesh(geomTire1, matTire1);
+	this.tire1.castShadow = true;
+	this.tire1.receiveShadow = true;
+	
+	var geomBlade2 = new THREE.CylinderGeometry(25,25,25,8);
+	var matBlade2 = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+	geomBlade2.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	var blade2 = new THREE.Mesh(geomBlade2, matBlade2);
+	blade2.position.set(0,0,0);
+	blade2.castShadow = true;
+	blade2.receiveShadow = true;
+	this.tire1.add(blade2);
+	this.tire1.position.set(55,-40,-80);
+	this.mesh.add(this.tire1);
+
+	var geomTire2 = new THREE.CylinderGeometry(30,30,20,10);
+	var matTire2 = new THREE.MeshPhongMaterial({color:Colors.pink, shading:THREE.FlatShading});
+	geomTire2.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	this.tire2 = new THREE.Mesh(geomTire2, matTire2);
+	this.tire2.castShadow = true;
+	this.tire2.receiveShadow = true;
+	
+	var geomBlade3 = new THREE.CylinderGeometry(25,25,25,8);
+	var matBlade3 = new THREE.MeshPhongMaterial({color:Colors.brownDark, shading:THREE.FlatShading});
+	geomBlade3.applyMatrix(new THREE.Matrix4().makeRotationZ(-Math.PI/2));
+	var blade3 = new THREE.Mesh(geomBlade3, matBlade3);
+	blade3.position.set(0,0,0);
+	blade3.castShadow = true;
+	blade3.receiveShadow = true;
+	this.tire2.add(blade3);
+	this.tire2.position.set(-55,-40,-80);
+	this.mesh.add(this.tire2);
+};
+
+var airplane;
+
+function createPlane(){ 
+	airplane = new AirPlane();
+	airplane.mesh.scale.set(.25,.25,.25);
+	airplane.mesh.position.y = 20;
+	airplane.mesh.position.z = -10;
+	airplane.mesh.rotation.x = 0;
+
+	scene.add(airplane.mesh);
+}
+
+// Define a Sky Object
+
+Sea = function(){
+	
+	// create the geometry (shape) of the cylinder;
+	// the parameters are: 
+	// radius top, radius bottom, height, number of segments on the radius, number of segments vertically
+	var geom = new THREE.CylinderGeometry(600,600,800,40,10);
+	
+	// rotate the geometry on the x axis
+	geom.applyMatrix(new THREE.Matrix4().makeRotationY(-Math.PI/2));
+	
+	// create the material 
+	var mat = new THREE.MeshPhongMaterial({
+		color:Colors.black,
+		transparent:true,
+		opacity:.95,
+		shading:THREE.FlatShading,
+	});
+
+	// To create an object in Three.js, we have to create a mesh 
+	// which is a combination of a geometry and some material
+	this.mesh = new THREE.Mesh(geom, mat);
+
+	// Allow the sea to receive shadows
+	this.mesh.receiveShadow = true; 
+}
+
+var sea;
+
+function createSea(){
+	sea = new Sea();
+
+	// push it a little bit at the bottom of the scene
+	sea.mesh.position.y = -400;
+
+	// add the mesh of the sea to the scene
+	scene.add(sea.mesh);
+}
+
+
+Cloud = function(){
+	// Create an empty container that will hold the different parts of the cloud
+	this.mesh = new THREE.Object3D();
+	
+	// create a cube geometry;
+	// this shape will be duplicated to create the cloud
+	var geom = new THREE.BoxGeometry(20,20,20);
+	
+	// create a material; a simple white material will do the trick
+	var mat = new THREE.MeshPhongMaterial({
+		color:Colors.blue,  
+	});
+	
+	// duplicate the geometry a random number of times
+	var nBlocs = 3+Math.floor(Math.random()*3);
+	for (var i=0; i<nBlocs; i++ ){
+		
+		// create the mesh by cloning the geometry
+		var m = new THREE.Mesh(geom, mat); 
+		
+		// set the position and the rotation of each cube randomly
+		m.position.x = i*200;
+		m.position.y = Math.random()*10;
+		m.position.z = Math.random()*10;
+		m.rotation.x = Math.random()*Math.PI*2;
+		m.rotation.y = Math.random()*Math.PI*2;
+		
+		// set the size of the cube randomly
+		var s = .1 + Math.random()*.9;
+		m.scale.set(s,s,s);
+		
+		// allow each cube to cast and to receive shadows
+		m.castShadow = true;
+		m.receiveShadow = true;
+		
+		// add the cube to the container we first created
+		this.mesh.add(m);
+	} 
+}
+
+
+Ennemy = function(){
+  var geom = new THREE.TetrahedronGeometry(8,2);
+  var mat = new THREE.MeshPhongMaterial({
+    color:Colors.red,
+    shininess:0,
+    specular:0xffffff,
+    shading:THREE.FlatShading
+  });
+  this.mesh = new THREE.Mesh(geom,mat);
+  this.mesh.castShadow = true;
+  this.angle = 0;
+  this.dist = 0;
+}
+
+EnnemiesHolder = function (){
+  this.mesh = new THREE.Object3D();
+  this.ennemiesInUse = [];
+}
+
+EnnemiesHolder.prototype.spawnEnnemies = function(){
+  var nEnnemies = game.level;
+
+  for (var i=0; i<nEnnemies; i++){
+    var ennemy;
+    if (ennemiesPool.length) {
+      ennemy = ennemiesPool.pop();
+    }else{
+      ennemy = new Ennemy();
+    }
+
+    ennemy.angle = - (i*0.1);
+    ennemy.distance = game.seaRadius + game.planeDefaultHeight + (-1 + Math.random() * 2) * (game.planeAmpHeight-20);
+    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.position.z = Math.cos(ennemy.angle)*ennemy.distance;
+
+    this.mesh.add(ennemy.mesh);
+    this.ennemiesInUse.push(ennemy);
+  }
+}
+
+EnnemiesHolder.prototype.rotateEnnemies = function(){
+  for (var i=0; i<this.ennemiesInUse.length; i++){
+    var ennemy = this.ennemiesInUse[i];
+    ennemy.angle += game.speed*deltaTime*game.ennemiesSpeed;
+
+    if (ennemy.angle > Math.PI*2) ennemy.angle -= Math.PI*2;
+
+    ennemy.mesh.position.y = -game.seaRadius + Math.sin(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.position.z = Math.cos(ennemy.angle)*ennemy.distance;
+    ennemy.mesh.rotation.z += Math.random()*.1;
+    ennemy.mesh.rotation.y += Math.random()*.1;
+
+    //var globalEnnemyPosition =  ennemy.mesh.localToWorld(new THREE.Vector3());
+    var diffPos = airplane.mesh.position.clone().sub(ennemy.mesh.position.clone());
+    var d = diffPos.length();
+    if (d<game.ennemyDistanceTolerance){
+      particlesHolder.spawnParticles(ennemy.mesh.position.clone(), 15, Colors.red, 3);
+
+      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+      this.mesh.remove(ennemy.mesh);
+      game.planeCollisionSpeedZ = 100 * diffPos.z / d;
+      game.planeCollisionSpeedY = 100 * diffPos.y / d;
+      ambientLight.intensity = 2;
+
+      removeEnergy();
+      i--;
+    }else if (ennemy.angle > Math.PI){
+      ennemiesPool.unshift(this.ennemiesInUse.splice(i,1)[0]);
+      this.mesh.remove(ennemy.mesh);
+      i--;
+    }
+  }
+}
+
+
+
+
+
+
+// Now we instantiate the sky and push its center a bit
+// towards the bottom of the screen
+Sky = function(){
+	// Create an empty container
+	this.mesh = new THREE.Object3D();
+	
+	// choose a number of clouds to be scattered in the sky
+	this.nClouds = 20;
+	
+	// To distribute the clouds consistently,
+	// we need to place them according to a uniform angle
+	var stepAngle = Math.PI*2 / this.nClouds;
+	
+	// create the clouds
+	for(var i=0; i<this.nClouds; i++){
+		var c = new Cloud();
+	 
+		// set the rotation and the position of each cloud;
+		// for that we use a bit of trigonometry
+		var a = stepAngle*i; // this is the final angle of the cloud
+		var h = 750 + Math.random()*200; // this is the distance between the center of the axis and the cloud itself
+
+		// Trigonometry!!! I hope you remember what you've learned in Math :)
+		// in case you don't: 
+		// we are simply converting polar coordinates (angle, distance) into Cartesian coordinates (x, y)
+		c.mesh.position.y = Math.sin(a)*h;
+		c.mesh.position.z = Math.cos(a)*h;
+
+		// rotate the cloud according to its position
+		c.mesh.rotation.z = a + Math.PI/2;
+
+		// for a better result, we position the clouds 
+		// at random depths inside of the scene
+		c.mesh.position.x = 200-Math.random()*400;
+		
+		// we also set a random scale for each cloud
+		var s = 1+Math.random()*2;
+		c.mesh.scale.set(s,s,s);
+
+		// do not forget to add the mesh of each cloud in the scene
+		this.mesh.add(c.mesh);  
+	}  
+}
+
+
+
+
+
+var sky;
+
+function createSky(){
+	sky = new Sky();
+	sky.mesh.position.y = -400;
+	scene.add(sky.mesh);
+}
+
+
+function createStar(){
+	starGeo = new THREE.Geometry();
+      for(let i=0;i<6000;i++) {
+        star = new THREE.Vector3(
+          Math.random() * 600 - 300,
+          Math.random() * 600 - 300,
+          Math.random() * 600 - 300
+        );
+        star.velocity = 0;
+        star.acceleration = 0.02;
+        starGeo.vertices.push(star);
+      }
+
+      let sprite = new THREE.TextureLoader().load( 'star.png' );
+      let starMaterial = new THREE.PointsMaterial({
+        color: 0xaaaaaa,
+        size: 0.7,
+        map: sprite
+      });
+
+      stars = new THREE.Points(starGeo,starMaterial);
+      scene.add(stars);
+  
+
+}
+
+
+function createEnnemies(){
+  for (var i=0; i<10; i++){
+    var ennemy = new Ennemy();
+    ennemiesPool.push(ennemy);
+  }
+  ennemiesHolder = new EnnemiesHolder();
+  //ennemiesHolder.mesh.position.y = -game.seaRadius;
+  scene.add(ennemiesHolder.mesh)
+}
+
+
+function loop(){
+
+    starGeo.vertices.forEach(p => {
+        p.velocity += p.acceleration
+        p.y -= p.velocity;
+        
+        if (p.y < -200) {
+          p.y = 200;
+          p.velocity = 0;
+        }
+      });
+      starGeo.verticesNeedUpdate = true;
+      stars.rotation.y +=0.002;
+
+
+    
+      ennemiesHolder.rotateEnnemies();
+
+	// Rotate the propeller, the sea and the sky
+	sea.mesh.rotation.y += .005;
+	sky.mesh.rotation.x += .01;
+
+    updatePlane();
+	// render the scene
+	renderer.render(scene, camera);
+
+	// call the loop function again
+	requestAnimationFrame(loop);
+}
+
+function updatePlane(){
+	var targetY = normalize(mousePos.y,-1,1,0, 0);
+	var targetX = normalize(mousePos.x,-1,1,-60, 60);
+	
+	// Move the plane at each frame by adding a fraction of the remaining distance
+	airplane.mesh.position.x += (targetX-airplane.mesh.position.x)*0.1;
+    
+	// Rotate the plane proportionally to the remaining distance
+	airplane.mesh.rotation.z = -(targetX-airplane.mesh.position.x)*0.0128;
+	airplane.mesh.rotation.x = (airplane.mesh.position.x-targetX)*0.0064;
+
+	airplane.tire.rotation.x += -0.1;
+	airplane.propeller1.rotation.x += -0.1;
+	airplane.tire1.rotation.x += -0.1;
+	airplane.tire2.rotation.x += -0.1;
+
+}
+
+
+function normalize(v,vmin,vmax,tmin, tmax){
+
+	var nv = Math.max(Math.min(v,vmax), vmin);
+	var dv = vmax-vmin;
+	var pc = (nv-vmin)/dv;
+	var dt = tmax-tmin;
+	var tv = tmin + (pc*dt);
+	return tv;
+
+}
+// Instantiate the sea and add it to the scene:
+
+
+
+function init(event) {
+	// set up the scene, the camera and the renderer
+	createScene();
+
+	// add the lights
+	createLights();
+
+    createStar();
+    
+	// add the objects
+	createPlane();
+	createSea();
+	createSky();
+    
+    createEnnemies();
+	
+
+    document.addEventListener('mousemove', handleMouseMove, false);
+	// start a loop that will update the objects' positions 
+	// and render the scene on each frame
+	loop();
+}
+var mousePos={x:0, y:0 };
+
+// now handle the mousemove event
+
+function handleMouseMove(event) {
+
+	// here we are converting the mouse position value received 
+	// to a normalized value varying between -1 and 1;
+	// this is the formula for the horizontal axis:
+	
+	var tx = -1 + (event.clientX / WIDTH)*2;
+
+	// for the vertical axis, we need to inverse the formula 
+	// because the 2D y-axis goes the opposite direction of the 3D y-axis
+	
+	var ty = 1 - (event.clientY / HEIGHT)*2;
+
+	//var tz = 1 - (event.clientZ / DEPTH)*2;
+	mousePos = {x:tx, y:ty};
+
+}
+
+window.addEventListener('load', init, false);
+
+</script> 
+
+   	</body>
+</html>
