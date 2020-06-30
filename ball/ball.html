@@ -39,7 +39,7 @@
 
 				// paste your code from the geometryGUI here
                 map = THREE.ImageUtils.loadTexture('text/poster.jpg');
-geometry = new THREE.CubeGeometry(200, 200, 200);
+geometry = new THREE.CubeGeometry(100, 100, 100);
 material = new THREE.MeshBasicMaterial({shading: THREE.FlatShading,map:map,side:THREE.DoubleSide});
 mesh = new THREE.Mesh(geometry, material);
 map.wrapS = map.wrapT = THREE.RepeatWrapping;
